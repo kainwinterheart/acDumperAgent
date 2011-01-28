@@ -17,14 +17,22 @@ namespace acDumperAgent
     {
         private IniFile agentConfig;
         private IniFile dumperConfig;
+        private IniFile dumperTaskList;
+
+        public string acDumperPath
+        {
+            get { return System.IO.Path.GetDirectoryName(dumperConfig.path); }
+        }
 
         public static string PWD = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
 
         private string CONFIG = System.IO.Path.Combine(PWD, "agent.conf");
         private string LOG = System.IO.Path.Combine(PWD, "agent.log");
 
-        // This definition must be exactly the same as acDumper' definition
+        /* These values must be exactly the same as acDumper' definition */
         private string JOB_STATUS_ACTIVE = "active";
+        private string CMD_KILL = "DIEPLZ";
+        /* ************************************************************* */
 
         public bool gotConfig = false;
 
@@ -150,6 +158,67 @@ namespace acDumperAgent
 
             return result;
         }
+
+        public bool isDumperRunning()
+        {
+            foreach (System.Diagnostics.Process clsProcess in System.Diagnostics.Process.GetProcesses())
+                if (clsProcess.ProcessName == "acDumper") return true;
+
+            return false;
+        }
+
+        public void killDumper()
+        {
+            string connFileName = dumperConfig.getStringValue("win32", "connectionFile");
+
+            System.Text.RegularExpressions.Regex something =
+                new System.Text.RegularExpressions.Regex("\\\\",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase |
+                    System.Text.RegularExpressions.RegexOptions.Compiled);
+
+            if (!something.Match(connFileName).Success)
+                connFileName = System.IO.Path.Combine(acDumperPath, connFileName);
+
+            // And now hope that this will be done really fast!
+            System.IO.TextWriter connFile = new System.IO.StreamWriter(connFileName, true);
+            connFile.WriteLine(CMD_KILL);
+            connFile.Close();
+            isDumperRunning();
+        }
+
+        public void startDumper()
+        {
+            string dumperExeName = System.IO.Path.Combine(acDumperPath, "acDumper.exe");
+            /*System.Diagnostics.ProcessStartInfo si =
+                new System.Diagnostics.ProcessStartInfo(dumperExeName);
+            //si.CreateNoWindow = true;
+            si.RedirectStandardError = false;
+            si.RedirectStandardOutput = false;
+            si.RedirectStandardInput = false;
+            si.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
+            //si.UseShellExecute = false;
+            si.WorkingDirectory = acDumperPath;
+            System.Diagnostics.Process.Start(si);*/
+
+            System.Diagnostics.Process p = null;
+            try
+            {
+                p = new System.Diagnostics.Process();
+                p.StartInfo.WorkingDirectory = acDumperPath;
+                p.StartInfo.FileName = "acDumper.exe";
+
+                p.StartInfo.Arguments = string.Format("Console application");
+                p.StartInfo.CreateNoWindow = false;
+                p.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
+                p.Start();
+                //p.WaitForExit();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception Occurred :{0},{1}",
+                          ex.Message, ex.StackTrace.ToString());
+            }
+        }
         
         public acDumperAgentClass()
         {
@@ -157,24 +226,31 @@ namespace acDumperAgent
             {
                 agentConfig = new IniFile(CONFIG);
 
-                string dumperTaskList = agentConfig.getStringValue("main", "dumperTaskList");
-                //log(dumperTaskList);
-                if (System.IO.File.Exists(dumperTaskList))
+                string dumperConfigFile = agentConfig.getStringValue("main", "dumperConfig");
+
+                if (System.IO.File.Exists(dumperConfigFile))
                 {
-                    dumperConfig = new IniFile(dumperTaskList);
-                    gotConfig = true;
+                    dumperConfig = new IniFile(dumperConfigFile);
+                    string dumperTaskListFile = System.IO.Path.GetDirectoryName(dumperConfigFile);
+                    dumperTaskListFile = System.IO.Path.Combine(dumperTaskListFile, "acDumperTasks.conf");
+
+                    if (System.IO.File.Exists(dumperTaskListFile))
+                    {
+                        dumperTaskList = new IniFile(dumperTaskListFile);
+                        gotConfig = true;
+                    }
                 }
             }
         }
 
         public string[] getRunningTasks()
         {
-            System.Collections.Generic.List<string> taskList = dumperConfig.getSectionNames();
+            System.Collections.Generic.List<string> taskList = dumperTaskList.getSectionNames();
             string runningTasks = "";
 
             for (int i = 0; i < taskList.Count; i++)
             {
-                string taskStatus = dumperConfig.getStringValue(taskList[i], "status");
+                string taskStatus = dumperTaskList.getStringValue(taskList[i], "status");
                 if (taskStatus == JOB_STATUS_ACTIVE) runningTasks += taskList[i] + '\0';
             }
 
@@ -186,7 +262,7 @@ namespace acDumperAgent
 
         public taskInfo[] getTasks() 
         {
-            System.Collections.Generic.List<string> taskList = dumperConfig.getSectionNames();
+            System.Collections.Generic.List<string> taskList = dumperTaskList.getSectionNames();
             taskInfo[] structTaskList = new taskInfo[taskList.Count];
 
             for (int i = 0; i < taskList.Count; i++)
@@ -194,13 +270,13 @@ namespace acDumperAgent
                 taskInfo task;
                 task.name = taskList[i];
 
-                string taskStatus = dumperConfig.getStringValue(task.name, "status");
+                string taskStatus = dumperTaskList.getStringValue(task.name, "status");
                 task.active = (taskStatus == JOB_STATUS_ACTIVE);
 
-                if (task.active) task.lastRun = "Currently running.";
+                if (task.active) task.lastRun = (isDumperRunning() ? "Currently running." : "Bad config, you need to remove \"status\" field from this task.");
                 else task.lastRun = ((taskStatus == "") ? (new UnixTime(0)).ToString() : (new UnixTime(long.Parse(taskStatus))).ToString());
 
-                task.nextRun = parseTaskTime(dumperConfig.getJobTimeValue(taskList[i], "jobtime"),
+                task.nextRun = parseTaskTime(dumperTaskList.getJobTimeValue(taskList[i], "jobtime"),
                     (task.active ? (long)(new UnixTime()).Value : ((taskStatus == "") ? 0 : long.Parse(taskStatus))));
 
                 structTaskList[i] = task;
@@ -216,7 +292,8 @@ namespace acDumperAgent
 
         public int getRefreshRate()
         {
-            return agentConfig.getIntValue("main", "refreshRate");
+            int refreshRate = agentConfig.getIntValue("main", "refreshRate");
+            return ((refreshRate == 0) ? 1 : refreshRate);
         }
 
         public void log(string msg)

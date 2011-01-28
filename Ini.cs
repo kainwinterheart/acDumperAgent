@@ -20,8 +20,7 @@ namespace Ini
             string key, string val, string filePath);
         [DllImport("kernel32", EntryPoint = "GetPrivateProfileStringW", CharSet = CharSet.Auto)]
         private static extern int GetPrivateProfileString(string section,
-                 string key, string def, string retVal,
-            int size, string filePath);
+            string key, string def, string retVal, int size, string filePath);
 
         /// <summary>
 
@@ -78,7 +77,7 @@ namespace Ini
             int i = GetPrivateProfileString(Section, Key, "", temp,
                                             MAXBUF, this.path);
             temp = temp.ToString().Trim();
-            return temp.Substring(0, temp.Length - 1);
+            return ((temp == "") ? "" : temp.Substring(0, temp.Length - 1));
 
         }
 

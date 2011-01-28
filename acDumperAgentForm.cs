@@ -33,6 +33,8 @@ namespace acDumperAgentMain
             {
                 this.dataGridView1.Rows.Add(task.name, task.active, task.lastRun, task.nextRun);
             }
+
+            if (!this.timer2.Enabled) checkButtons();
         }
 
         private void Form1_FormClosed(object sender, System.Windows.Forms.FormClosedEventArgs e)
@@ -52,9 +54,11 @@ namespace acDumperAgentMain
 
             System.Threading.Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo("en-GB");
 
-            //agentClass.
-
+            this.timer1.Interval = agentClass.getRefreshRate() * 1000;
             this.timer1.Enabled = true;
+            this.timer2.Enabled = false;
+
+            checkButtons();
         }
 
         private void warmUp()
@@ -82,6 +86,12 @@ namespace acDumperAgentMain
 
             this.CloseBtn.Left = this.Width - this.CloseBtn.Width - 12;
             this.CloseBtn.Top = this.dataGridView1.Bottom + 4;
+
+            this.KillBtn.Left = 4;
+            this.KillBtn.Top = this.CloseBtn.Top;
+
+            this.StartBtn.Left = 4 + this.KillBtn.Width + 4;
+            this.StartBtn.Top = this.CloseBtn.Top;
         }
 
         private void CloseBtn_Click(object sender, System.EventArgs e)
@@ -100,6 +110,32 @@ namespace acDumperAgentMain
         private void timer1_Tick(object sender, System.EventArgs e)
         {
             if (this.Visible) refreshGrid();
+        }
+
+        private void timer2_Tick(object sender, System.EventArgs e)
+        {
+            this.timer2.Enabled = false;
+            checkButtons();
+        }
+
+        private void checkButtons()
+        {
+            this.KillBtn.Enabled = agentClass.isDumperRunning();
+            this.StartBtn.Enabled = !this.KillBtn.Enabled;
+        }
+
+        private void KillBtn_Click(object sender, System.EventArgs e)
+        {
+            agentClass.killDumper();
+            this.KillBtn.Enabled = false;
+            this.timer2.Enabled = true;
+        }
+
+        private void StartBtn_Click(object sender, System.EventArgs e)
+        {
+            agentClass.startDumper();
+            this.StartBtn.Enabled = false;
+            this.timer2.Enabled = true;
         }
     }
 }
