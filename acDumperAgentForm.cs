@@ -90,7 +90,7 @@ namespace acDumperAgentMain
             this.KillBtn.Left = 4;
             this.KillBtn.Top = this.CloseBtn.Top;
 
-            this.StartBtn.Left = 4 + this.KillBtn.Width + 4;
+            this.StartBtn.Left = 4; //4 + this.KillBtn.Width + 4;
             this.StartBtn.Top = this.CloseBtn.Top;
         }
 
@@ -120,8 +120,11 @@ namespace acDumperAgentMain
 
         private void checkButtons()
         {
-            this.KillBtn.Enabled = agentClass.isDumperRunning();
-            this.StartBtn.Enabled = !this.KillBtn.Enabled;
+            this.KillBtn.Visible = agentClass.isDumperRunning();
+            this.StartBtn.Visible = !this.KillBtn.Visible;
+
+            this.KillBtn.Enabled = this.KillBtn.Visible;
+            this.StartBtn.Enabled = this.StartBtn.Visible;
         }
 
         private void KillBtn_Click(object sender, System.EventArgs e)

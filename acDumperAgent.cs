@@ -2,6 +2,7 @@
 using Ini;
 using acDumperAgentMain;
 using unixtime;
+using System.Runtime.InteropServices;
 
 namespace acDumperAgent
 {
@@ -11,6 +12,46 @@ namespace acDumperAgent
         public bool active;
         public string lastRun;
         public string nextRun;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct STARTUPINFO
+    {
+        public Int32 cb;
+        public string lpReserved;
+        public string lpDesktop;
+        public string lpTitle;
+        public Int32 dwX;
+        public Int32 dwY;
+        public Int32 dwXSize;
+        public Int32 dwYSize;
+        public Int32 dwXCountChars;
+        public Int32 dwYCountChars;
+        public Int32 dwFillAttribute;
+        public Int32 dwFlags;
+        public Int16 wShowWindow;
+        public Int16 cbReserved2;
+        public IntPtr lpReserved2;
+        public IntPtr hStdInput;
+        public IntPtr hStdOutput;
+        public IntPtr hStdError;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct PROCESS_INFORMATION
+    {
+        public IntPtr hProcess;
+        public IntPtr hThread;
+        public int dwProcessId;
+        public int dwThreadId;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SECURITY_ATTRIBUTES
+    {
+        public int nLength;
+        public IntPtr lpSecurityDescriptor;
+        public int bInheritHandle;
     }
 
     public class acDumperAgentClass
@@ -35,6 +76,17 @@ namespace acDumperAgent
         /* ************************************************************* */
 
         public bool gotConfig = false;
+
+        [DllImport("kernel32.dll")]
+        static extern bool CreateProcess(string lpApplicationName,
+           string lpCommandLine, ref SECURITY_ATTRIBUTES lpProcessAttributes,
+           ref SECURITY_ATTRIBUTES lpThreadAttributes, bool bInheritHandles,
+           uint dwCreationFlags, IntPtr lpEnvironment, string lpCurrentDirectory,
+           [In] ref STARTUPINFO lpStartupInfo,
+           out PROCESS_INFORMATION lpProcessInformation);
+
+        [DllImport("Kernel32.dll", EntryPoint = "RtlZeroMemory", SetLastError = false)]
+        static extern void ZeroMemory(IntPtr dest, IntPtr size);
 
         // This is a rewriting of "bool acDumper::isItNow(string jobTime, unsigned int lastTime)" from acDumper
         private string parseTaskTime(string jobTime, long lastTime)
@@ -186,38 +238,24 @@ namespace acDumperAgent
             isDumperRunning();
         }
 
-        public void startDumper()
+        unsafe public void startDumper()
         {
             string dumperExeName = System.IO.Path.Combine(acDumperPath, "acDumper.exe");
-            /*System.Diagnostics.ProcessStartInfo si =
-                new System.Diagnostics.ProcessStartInfo(dumperExeName);
-            //si.CreateNoWindow = true;
-            si.RedirectStandardError = false;
-            si.RedirectStandardOutput = false;
-            si.RedirectStandardInput = false;
-            si.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
-            //si.UseShellExecute = false;
-            si.WorkingDirectory = acDumperPath;
-            System.Diagnostics.Process.Start(si);*/
+ 
+            PROCESS_INFORMATION pInfo = new PROCESS_INFORMATION();
+            STARTUPINFO sInfo = new STARTUPINFO();
+            SECURITY_ATTRIBUTES pSec = new SECURITY_ATTRIBUTES();
+            SECURITY_ATTRIBUTES tSec = new SECURITY_ATTRIBUTES();
+            pSec.nLength = Marshal.SizeOf(pSec);
+            tSec.nLength = Marshal.SizeOf(tSec);
 
-            System.Diagnostics.Process p = null;
-            try
-            {
-                p = new System.Diagnostics.Process();
-                p.StartInfo.WorkingDirectory = acDumperPath;
-                p.StartInfo.FileName = "acDumper.exe";
+            sInfo.cb = Marshal.SizeOf(typeof(STARTUPINFO));
+            sInfo.dwFlags = 0x00000001;
+            sInfo.wShowWindow = 0;
 
-                p.StartInfo.Arguments = string.Format("Console application");
-                p.StartInfo.CreateNoWindow = false;
-                p.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
-                p.Start();
-                //p.WaitForExit();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Exception Occurred :{0},{1}",
-                          ex.Message, ex.StackTrace.ToString());
-            }
+            CreateProcess(dumperExeName, null,
+            ref pSec, ref tSec, false, 0x00000010,
+            IntPtr.Zero, acDumperPath, ref sInfo, out pInfo);
         }
         
         public acDumperAgentClass()
