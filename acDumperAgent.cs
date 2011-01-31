@@ -85,9 +85,6 @@ namespace acDumperAgent
            [In] ref STARTUPINFO lpStartupInfo,
            out PROCESS_INFORMATION lpProcessInformation);
 
-        [DllImport("Kernel32.dll", EntryPoint = "RtlZeroMemory", SetLastError = false)]
-        static extern void ZeroMemory(IntPtr dest, IntPtr size);
-
         // This is a rewriting of "bool acDumper::isItNow(string jobTime, unsigned int lastTime)" from acDumper
         private string parseTaskTime(string jobTime, long lastTime)
         {
@@ -235,7 +232,6 @@ namespace acDumperAgent
             System.IO.TextWriter connFile = new System.IO.StreamWriter(connFileName, true);
             connFile.WriteLine(CMD_KILL);
             connFile.Close();
-            isDumperRunning();
         }
 
         unsafe public void startDumper()
@@ -253,7 +249,7 @@ namespace acDumperAgent
             sInfo.dwFlags = 0x00000001;
             sInfo.wShowWindow = 0;
 
-            CreateProcess(dumperExeName, null,
+            CreateProcess(null, dumperExeName,
             ref pSec, ref tSec, false, 0x00000010,
             IntPtr.Zero, acDumperPath, ref sInfo, out pInfo);
         }
