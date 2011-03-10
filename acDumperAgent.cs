@@ -249,7 +249,9 @@ namespace acDumperAgent
             sInfo.dwFlags = 0x00000001;
             sInfo.wShowWindow = 0;
 
-            CreateProcess(null, dumperExeName,
+            this.log("start " + dumperExeName);
+
+            CreateProcess(null, "cmd.exe /c start /b /i " + dumperExeName,
             ref pSec, ref tSec, false, 0x00000010,
             IntPtr.Zero, acDumperPath, ref sInfo, out pInfo);
         }
